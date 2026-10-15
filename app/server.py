@@ -1441,7 +1441,7 @@ class Handler(SimpleHTTPRequestHandler):
                                    "logos": looks.logos(), "presets": looks.PRESETS, "color_keys": looks.COLOR_KEYS, "season_now": looks.season_on(), "fonts": looks.font_list(),
                                    "trivia_topics": [[k, v[1]] for k, v in facts.TRIVIA_TOPICS.items()], "facts_status": facts.status(),
                                    "counts": {"facts": len(_lines(FACTS)), "trivia": len(trivia())},
-                                   "etv_where_auto": etv_where(auto_only=True), "configured": configured(),
+                                   "etv_where_auto": etv_where(auto_only=True), "configured": configured(), "windows_app": bool(os.environ.get("KNAS_SUPERVISED")) or os.name == "nt",
                                    "auto_location": ({"city": AUTO.get("city"), "region": AUTO.get("region"), "tz": AUTO.get("tz"),
                                                       "metric": METRIC} if AUTO and not env("CITY_NAME") else None)})
         try:

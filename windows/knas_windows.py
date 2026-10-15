@@ -168,14 +168,37 @@ def ersatztv_here():
 # ============================================================ helpers
 
 def lan_ip():
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    """This PC's address on the home network (192.168.x.x), skipping VPN and Tailscale addresses."""
+    found = []
+    for probe in ("192.168.255.255", "172.31.255.255", "10.255.255.255"):
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect((probe, 1))
+            found.append(s.getsockname()[0])
+            s.close()
+        except OSError:
+            pass
     try:
-        s.connect(("10.255.255.255", 1))
-        return s.getsockname()[0]
+        found += [a[4][0] for a in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)]
     except OSError:
-        return "127.0.0.1"
-    finally:
-        s.close()
+        pass
+
+    def score(ip):
+        try:
+            p = [int(x) for x in ip.split(".")]
+        except ValueError:
+            return 0
+        if p[0] in (0, 127) or (p[0] == 169 and p[1] == 254) or (p[0] == 100 and 64 <= p[1] <= 127):
+            return 0
+        if p[0] == 192 and p[1] == 168:
+            return 5
+        if p[0] == 172 and 16 <= p[1] <= 31:
+            return 3
+        if p[0] == 10:
+            return 1 if p[1] in (2, 5, 8, 64, 96, 124) else 4      # ProtonVPN and other VPNs use these
+        return 1
+    best = max(found, key=score, default="")
+    return best if best and score(best) else "127.0.0.1"
 
 
 def knas_up(timeout=1.5):

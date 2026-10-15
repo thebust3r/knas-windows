@@ -268,16 +268,46 @@ def configured():
 
 
 def lan_ip():
-    """This machine's address on your home network."""
-    import socket
+    """This machine's address on your home network (like 192.168.1.50), for the links and QR codes KNAS shows.
+    Skips VPN addresses (a VPN that's on would otherwise win) and Tailscale; LAN_IP in settings overrides it."""
+    import socket, time as _t
+    fixed = (os.environ.get("LAN_IP") or "").strip()
+    if fixed:
+        return fixed
+    if _LAN["ip"] and _t.time() - _LAN["at"] < 60:
+        return _LAN["ip"]
+    found = []
+    for probe in ("192.168.255.255", "172.31.255.255", "10.255.255.255", "8.8.8.8"):
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect((probe, 1))
+            found.append(s.getsockname()[0])
+            s.close()
+        except OSError:
+            pass
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("10.255.255.255", 1))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
+        found += [a[4][0] for a in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)]
     except OSError:
-        return "YOUR_NAS_IP"
+        pass
+
+    def score(ip):
+        p = [int(x) for x in ip.split(".")] if re.fullmatch(r"\d+\.\d+\.\d+\.\d+", ip) else [0, 0, 0, 0]
+        if p[0] in (0, 127) or (p[0] == 169 and p[1] == 254) or (p[0] == 100 and 64 <= p[1] <= 127):
+            return 0                                   # not usable / link-local / Tailscale
+        if p[0] == 192 and p[1] == 168:
+            return 5                                   # almost every home router
+        if p[0] == 172 and 16 <= p[1] <= 31:
+            return 3 if p[1] != 17 else 2              # 172.17 is usually Docker's own network
+        if p[0] == 10:
+            return 1 if p[1] in (2, 5, 8, 64, 96, 124) else 4      # common VPN ranges (ProtonVPN is 10.2.0.x) score low
+        return 1
+    best = max(found, key=score, default="")
+    ip = best if best and score(best) > 0 else "YOUR_NAS_IP"
+    _LAN.update(ip=ip, at=_t.time())
+    return ip
+
+
+_LAN = {"ip": "", "at": 0}
 
 
 # KNAS's secure address (https), for the camera, microphone and motion sensors (app/securecert.py)

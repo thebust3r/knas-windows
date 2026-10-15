@@ -31,14 +31,18 @@ jobs:
       - name: Build the app
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean --windowed --name KNAS42 --icon build/knas.ico `
-            --distpath dist --workpath build/pyi --specpath build `
-            --paths windows --hidden-import knas_std_imports --hidden-import pystray._win32 `
+          $ErrorActionPreference = "Continue"
+          $r = $PWD.Path
+          pyinstaller --noconfirm --clean --windowed --name KNAS42 --icon "$r\build\knas.ico" `
+            --distpath "$r\dist" --workpath "$r\build\pyi" --specpath "$r\build" `
+            --paths "$r\windows" --hidden-import knas_std_imports --hidden-import pystray._win32 `
             --collect-data tzdata --collect-submodules xml --collect-submodules email --collect-submodules http `
             --collect-submodules urllib --collect-submodules concurrent --collect-submodules json --collect-submodules sqlite3 `
-            --add-data "$PWD\build\knas;knas" --add-data "$PWD\build\knas.ico;." `
-            windows/knas_windows.py
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            --add-data "$r\build\knas;knas" --add-data "$r\build\knas.ico;." `
+            "$r\windows\knas_windows.py" 2>&1 | Tee-Object -FilePath pyi.log
+          $code = $LASTEXITCODE
+          Select-String -Path pyi.log -Pattern 'ERROR|Error|error:|Traceback' | Select-Object -Last 15 | ForEach-Object { Write-Output "::error::$($_.Line)" }
+          if ($code -ne 0) { exit $code }
           Get-ChildItem dist/KNAS42 | Select-Object Name, Length | Format-Table -AutoSize
 
       - name: Check the app runs KNAS
